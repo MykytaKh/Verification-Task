@@ -1,0 +1,6 @@
+framework module Pods_Verification_Task {
+  umbrella header "Pods-Verification Task-umbrella.h"
+
+  export *
+  module * { export * }
+}
