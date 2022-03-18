@@ -14,6 +14,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     private weak var t1: DispatchQueue?
     private weak var t2: DispatchQueue?
     private weak var t3: DispatchQueue?
+    private weak var resultQueue = DispatchQueue.global(qos: .background)
     
     private let startButton = UIButton(type: .system)
     private let stopButton = UIButton(type: .system)
@@ -31,9 +32,6 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     private var maxItemsNumberC: Int
     private var url: URL
     private var resultsList = [String]()
-    var resultsListToSend: [String] {
-        return resultsList
-    }
     private var gpsTimer: DispatchSourceTimer?
     private var batteryTimer: DispatchSourceTimer?
     private var isAlreadyStarted = false
@@ -61,7 +59,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         }
         isAlreadyStarted = true
         
-        t1 = DispatchQueue.global(qos: .userInitiated)
+        t1 = DispatchQueue.global(qos: .background)
         t1?.async { [weak self] in
             guard let self = self else {
                 return
@@ -124,16 +122,19 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     }
     
     private func addToList(result: String) {
-        resultsList.append(result)
-        print(result)
-        if resultsList.count > maxItemsNumberC {
-            t3 = DispatchQueue.global(qos: .background)
-            t3?.async { [weak self] in
-                guard let self = self else {
-                    return
+        resultQueue?.sync {
+            resultsList.append(result)
+            print(result)
+            if resultsList.count > maxItemsNumberC {
+                t3 = DispatchQueue.global(qos: .background)
+                let resultsListToSend = resultsList
+                t3?.async { [weak self] in
+                    guard let self = self else {
+                        return
+                    }
+                    self.sendToServer(list: resultsListToSend, url: self.url)
                 }
-                self.sendToServer(list: self.resultsListToSend, url: self.url)
-                self.resultsList = []
+                resultsList = []
             }
         }
     }
@@ -146,7 +147,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body, options: .fragmentsAllowed)
         
         URLSession.shared.dataTask(with: request) { data, response, error in
-            guard let data = data, error == nil, let status = (response as? HTTPURLResponse)?.statusCode, status == 200 else {
+            guard let data = data, error == nil, let status = (response as? HTTPURLResponse)?.statusCode, status >= 200 && status <= 299 else {
                 return
             }
             do {
